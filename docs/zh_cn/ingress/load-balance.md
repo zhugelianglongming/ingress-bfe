@@ -1,7 +1,7 @@
 # 多Service之间负载均衡
 BFE-Ingress通过`Ingress Annotation`的方式支持多个Service之间按权重进行负载均衡，配置如下：
 ```yaml
-apiVersion: networking.k8s.io/v1
+apiVersion: networking.k8s.io/v1beta1
 kind: Ingress
 metadata:
   name: tls-example-ingress
@@ -19,8 +19,6 @@ spec:
       - path: /
         pathType: Prefix
         backend:
-          service:
-            name: service
-            port:
-              number: 80
+          serviceName: service
+          servicePort: 80
 ```

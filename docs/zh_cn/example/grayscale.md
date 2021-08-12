@@ -4,7 +4,7 @@ BFE-Ingress通过`Ingress Annotation`的方式支持`Header/Cookie`灰度发布�
 
 ```yaml
 kind: Ingress
-apiVersion: extensions/v1beta1
+apiVersion: networking.k8s.io/v1beta1
 metadata:
   name: "greyscale"
   namespace: production
@@ -24,7 +24,7 @@ spec:
               servicePort: 80
 ---
 kind: Ingress
-apiVersion: extensions/v1beta1
+apiVersion: networking.k8s.io/v1beta1
 metadata:
   name: "original"
   namespace: production
@@ -41,7 +41,7 @@ spec:
               servicePort: 80
 ```
 基于上面的配置，BFE将会
-0. 若满足 `host == example.net && path == /bar && cookie[key] == value && Header[Key] == Value`，
+1. 若满足 `host == example.net && path == /bar && cookie[key] == value && Header[Key] == Value`，
    则分流到`service-new`集群
-0. 否则，若仅满足 `host == example.net && path == /bar`，
+1. 否则，若仅满足 `host == example.net && path == /bar`，
    则分流到`service-old`集群

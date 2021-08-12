@@ -7,7 +7,7 @@ Ingress 资源定义了 Kubernetes 集群内服务对外提供服务时的流量
 ## 示例
 ### 简单示例
 ```yaml
-apiVersion: extensions/v1beta1
+apiVersion: networking.k8s.io/v1beta1
 kind: Ingress
 metadata:
   name: simple-ingress
@@ -30,7 +30,7 @@ spec:
 
 ### 复杂示例
 ```yaml
-apiVersion: extensions/v1beta1
+apiVersion: networking.k8s.io/v1beta1
 kind: Ingress
 metadata:
   name: complex-ingress

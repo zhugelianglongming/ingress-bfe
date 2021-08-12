@@ -13,7 +13,7 @@ type: kubernetes.io/tls
 ```
 Ingress配置
 ```yaml
-apiVersion: networking.k8s.io/v1
+apiVersion: networking.k8s.io/v1beta1
 kind: Ingress
 metadata:
   name: tls-example-ingress
@@ -29,9 +29,7 @@ spec:
       - path: /
         pathType: Prefix
         backend:
-          service:
-            name: service1
-            port:
-              number: 80
+          serviceName: service1
+          servicePort: 80
 ```
 BFE-Ingress按照同样的方式来管理TLS的证书和密钥，其余更高级的TLS功能，包括一些TLS的配置，密钥加密等功能，需要参考BFE-Ingress CRD来实现；

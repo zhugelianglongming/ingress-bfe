@@ -9,7 +9,7 @@
 ### 域名优先
 ```yaml
 kind: Ingress
-apiVersion: extensions/v1beta1
+apiVersion: networking.k8s.io/v1beta1
 metadata:
   name: "host_priority1"
   namespace: production
@@ -25,7 +25,7 @@ spec:
               servicePort: 80
 ---
 kind: Ingress
-apiVersion: extensions/v1beta1
+apiVersion: networking.k8s.io/v1beta1
 metadata:
   name: "host_priority2"
   namespace: production
@@ -45,7 +45,7 @@ spec:
 ### 域名相同，优先路径
 ```yaml
 kind: Ingress
-apiVersion: extensions/v1beta1
+apiVersion: networking.k8s.io/v1beta1
 metadata:
   name: "path_priority1"
   namespace: production
@@ -61,7 +61,7 @@ spec:
               servicePort: 80
 ---
 kind: Ingress
-apiVersion: extensions/v1beta1
+apiVersion: networking.k8s.io/v1beta1
 metadata:
   name: "path_priority2"
   namespace: production
@@ -81,7 +81,7 @@ spec:
 ### 路径优先规则个数
 ```yaml
 kind: Ingress
-apiVersion: extensions/v1beta1
+apiVersion: networking.k8s.io/v1beta1
 metadata:
   name: "cond_priority1"
   namespace: production
@@ -97,7 +97,7 @@ spec:
               servicePort: 80
 ---
 kind: Ingress
-apiVersion: extensions/v1beta1
+apiVersion: networking.k8s.io/v1beta1
 metadata:
   name: "cond_priority1"
   namespace: production
@@ -116,7 +116,7 @@ spec:
 ### 规则个数相同，按固定顺序排序
 ```yaml
 kind: Ingress
-apiVersion: extensions/v1beta1
+apiVersion: networking.k8s.io/v1beta1
 metadata:
   name: "multi_cond_priority1"
   namespace: production
@@ -132,7 +132,7 @@ spec:
               servicePort: 80
 ---
 kind: Ingress
-apiVersion: extensions/v1beta1
+apiVersion: networking.k8s.io/v1beta1
 metadata:
   name: "multi_cond_priority2"
   namespace: production
