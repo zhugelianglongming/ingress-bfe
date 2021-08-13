@@ -52,7 +52,7 @@ spec:
     不同 namespace 的相同资源名***不存在***冲突。
     * ingress 资源：controller 中通过 `${namespace}/${ingress}` 定位 ingress 资源；
     故不同 namespace 下的 ingress 资源无歧义，不存在冲突
-    * service 资源：ingress 中引用的 service 资源拥有相同的 namespace 属性（默认为 default），
+    * service 资源：每个 ingress 资源 与 其中引用的 service 资源 拥有相同的 namespace 属性（默认为 default），
     controller 中通过 `${namespace}/${service}` 定位 service 资源；
     故不同 namespace 下的 service 资源无歧义，不存在冲突
    
