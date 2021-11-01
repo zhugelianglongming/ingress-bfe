@@ -1,7 +1,7 @@
 # Contribute Code
 This document explains how to contribute code
 
-## Coding Standard
+## Requirements of coding
 - For code and comment, follow the [Golang style guide](https://github.com/golang/go/wiki/Style).
 - Provide unit test for all code
 - Pass all unit test
@@ -12,13 +12,13 @@ Below tutorial will guide you to submit code
 
 1. [Fork](https://help.github.com/articles/fork-a-repo/)
    
-    Go to [BFE Ingress Github][], click `Fork` button and generate a repository in your own github space.
+    Go to [BFE Ingress Github][], click `Fork` button to create a repository in your own github space.
     
     >  `https://github.com/${USERNAME}/ingress-bfe`
     
 1. Clone
    
-    Clone the repository  in your own space to your local :
+    Clone the repository in your own space to your local :
     ```bash
     $ git clone https://github.com/${USERNAME}/ingress-bfe
     $ cd ingress-bfe
@@ -35,7 +35,7 @@ Below tutorial will guide you to submit code
     $ git checkout -b my-cool-stuff
     ```
     
-    > Before checkout, verify by `git status` command and keep current branch clean, otherwise untracked files will be bring to the new branch. 
+    > Before checkout, verify by `git status` command and keep current branch clean, otherwise untracked files will be brought to the new branch. 
     
 1. Use pre-commit hook
 
@@ -47,13 +47,13 @@ Below tutorial will guide you to submit code
         $ pip install pre-commit
         $ pre-commit install
         ```
-    1. use  `gofmt` to adjust golang source code format.
+    1. use `gofmt` to format code.
     
 1. Coding
 
 1. Build and test
 
-    Compile  BFE Ingress Controller docker from source code and test, see more instruction in [Deploy Guide](../deployment.md)
+    Compile source code, build BFE Ingress Controller docker and then test it. See more instruction in [Deploy Guide](../deployment.md)
     
 1. Commit
 
@@ -73,7 +73,7 @@ Below tutorial will guide you to submit code
     
 1. Keep local repository up-to-date
 
-1. An experienced Git user pulls from the official repo often -- daily or even hourly, so they notice conflicts with others work early, and it's easier to resolve smaller conflicts.
+    An experienced Git user always pulls from the official repo before pushing. They even pulls daily or hourly, so they notice conflicts with others work earlier, it makes it easier to resolve conflicts which is smaller.
 
    ```bash
    git remote add upstream https://github.com/bfenetworks/bfe
@@ -93,7 +93,7 @@ $ git push origin my-cool-stuff
 
 ## Pull Request
 
-1. Create an Issue and initiate Pull Request
+1. Create an Issue and finish Pull Request
 1. Pass unit test
 1. Delete the branch used at your own repository
 1. Delete the branch used at your local repository
