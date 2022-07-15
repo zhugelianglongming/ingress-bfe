@@ -11,18 +11,19 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+
 package configs
 
 import (
 	"fmt"
-	"strings"
 
+	"github.com/bfenetworks/ingress-bfe/internal/bfeConfig/configs/cache"
+	"github.com/bfenetworks/ingress-bfe/internal/bfeConfig/configs/condition"
 	netv1 "k8s.io/api/networking/v1"
 
 	"github.com/bfenetworks/bfe/bfe_config/bfe_cluster_conf/cluster_conf"
 	"github.com/bfenetworks/bfe/bfe_config/bfe_route_conf/host_rule_conf"
 	"github.com/bfenetworks/bfe/bfe_config/bfe_route_conf/route_rule_conf"
-	"github.com/bfenetworks/ingress-bfe/internal/bfeConfig/annotations"
 	"github.com/bfenetworks/ingress-bfe/internal/bfeConfig/util"
 	"github.com/bfenetworks/ingress-bfe/internal/option"
 )
@@ -43,7 +44,7 @@ type ServerDataConfig struct {
 	routeTableVersion     string
 	bfeClusterConfVersion string
 
-	routeRuleCache *RouteRuleCache
+	routeRuleCache cache.Cache
 
 	hostTableConf  *host_rule_conf.HostTableConf
 	routeTableFile *route_rule_conf.RouteTableFile
@@ -52,7 +53,7 @@ type ServerDataConfig struct {
 
 func NewServerDataConfig(version string) *ServerDataConfig {
 	return &ServerDataConfig{
-		routeRuleCache: NewRouteRuleCache(),
+		routeRuleCache: cache.NewBaseCache(),
 		hostTableConf:  newHostTableConf(version),
 		routeTableFile: newRouteTableConfFile(version),
 		bfeClusterConf: newBfeClusterConf(version),
@@ -115,17 +116,17 @@ func (c *ServerDataConfig) UpdateIngress(ingress *netv1.Ingress) error {
 
 	//delete existing ingress
 	if c.routeRuleCache.ContainsIngress(ingressName) {
-		c.routeRuleCache.DeleteHttpRulesByIngress(ingressName)
+		c.routeRuleCache.DeleteRulesByIngress(ingressName)
 	}
 
 	if err := c.updateCache(ingress); err != nil {
 		// delete rules which have been inserted
-		c.routeRuleCache.DeleteHttpRulesByIngress(ingressName)
+		c.routeRuleCache.DeleteRulesByIngress(ingressName)
 		return err
 	}
 
 	if err := c.updateRouteTable(); err != nil {
-		c.routeRuleCache.DeleteHttpRulesByIngress(ingressName)
+		c.routeRuleCache.DeleteRulesByIngress(ingressName)
 		return err
 	}
 
@@ -141,96 +142,30 @@ func (c *ServerDataConfig) DeleteIngress(namespace, name string) {
 		return
 	}
 
-	c.routeRuleCache.DeleteHttpRulesByIngress(ingressName)
+	c.routeRuleCache.DeleteRulesByIngress(ingressName)
 	c.updateRouteTable()
 	c.updateBfeClusterConf()
 }
 
 func (c *ServerDataConfig) updateCache(ingress *netv1.Ingress) error {
-	for _, rule := range ingress.Spec.Rules {
-		if rule.HTTP == nil || len(rule.HTTP.Paths) == 0 {
-			continue
-		}
-
-		for _, p := range rule.HTTP.Paths {
-			if err := c.addRule(ingress, rule.Host, p); err != nil {
-				return err
-			}
-		}
-	}
-	return nil
-}
-
-func (c *ServerDataConfig) addRule(ingress *netv1.Ingress, host string, httpPath netv1.HTTPIngressPath) error {
-	if err := checkHost(host); err != nil {
-		return err
-	}
-
-	if len(host) == 0 {
-		host = "*"
-	}
-
-	path := httpPath.Path
-	if err := checkPath(path); err != nil {
-		return err
-	}
-
-	if httpPath.PathType == nil || *httpPath.PathType == netv1.PathTypePrefix || *httpPath.PathType == netv1.PathTypeImplementationSpecific {
-		path = path + "*"
-	}
-
-	ingressName := util.NamespacedName(ingress.Namespace, ingress.Name)
-	clusterName := util.ClusterName(ingressName, httpPath.Backend.Service)
-
-	// put rule into cache
-	err := c.routeRuleCache.PutHttpRule(
-		NewHttpRule(
-			ingressName,
-			host,
-			path,
-			ingress.Annotations,
-			clusterName,
-			ingress.CreationTimestamp.Time,
-		),
-	)
-
-	return err
-}
-
-func checkHost(host string) error {
-	// wildcard hostname: started with "*." is allowed
-	if strings.Count(host, "*") > 1 || (strings.Count(host, "*") == 1 && !strings.HasPrefix(host, "*.")) {
-		return fmt.Errorf("wildcard host[%s] is illegal, should start with *. ", host)
-	}
-	return nil
-}
-
-func checkPath(path string) error {
-	if len(path) == 0 {
-		return fmt.Errorf("path is not set")
-	}
-
-	if strings.ContainsAny(path, "*") {
-		return fmt.Errorf("path[%s] is illegal", path)
-	}
-	return nil
+	return c.routeRuleCache.UpdateByIngress(ingress)
 }
 
 func (c *ServerDataConfig) updateRouteTable() error {
-	basicRules, advancedRules := c.routeRuleCache.GetHttpRules()
+	basicRules, advancedRules := c.routeRuleCache.GetRules()
 
 	routeTableFile := newRouteTableConfFile(util.NewVersion())
 	for _, rule := range basicRules {
 		ruleFile := route_rule_conf.BasicRouteRuleFile{
-			ClusterName: &rule.cluster,
+			ClusterName: util.StrPtr(rule.GetCluster()),
 		}
 
-		if len(rule.host) > 0 && rule.host != "*" {
-			ruleFile.Hostname = []string{rule.host}
+		if len(rule.GetHost()) > 0 && rule.GetHost() != "*" {
+			ruleFile.Hostname = []string{rule.GetHost()}
 		}
 
-		if len(rule.path) > 0 {
-			ruleFile.Path = []string{rule.path}
+		if len(rule.GetPath()) > 0 {
+			ruleFile.Path = []string{rule.GetPath()}
 		}
 
 		(*routeTableFile.BasicRule)[DefaultProduct] = append(
@@ -238,13 +173,13 @@ func (c *ServerDataConfig) updateRouteTable() error {
 	}
 
 	for _, rule := range advancedRules {
-		condition, err := buildCondition(rule.host, rule.path, rule.annotations)
+		condition, err := condition.BuildCondition(rule.GetHost(), rule.GetPath(), rule.GetAnnotations())
 		if err != nil {
 			return err
 		}
 		ruleFile := route_rule_conf.AdvancedRouteRuleFile{
 			Cond:        &condition,
-			ClusterName: &rule.cluster,
+			ClusterName: util.StrPtr(rule.GetCluster()),
 		}
 		(*routeTableFile.ProductRule)[DefaultProduct] = append((*routeTableFile.ProductRule)[DefaultProduct], ruleFile)
 	}
@@ -270,22 +205,22 @@ func (c *ServerDataConfig) updateRouteTable() error {
 }
 
 func (c *ServerDataConfig) updateBfeClusterConf() {
-	basicRules, advancedRules := c.routeRuleCache.GetHttpRules()
+	basicRules, advancedRules := c.routeRuleCache.GetRules()
 
 	clusterConf := newBfeClusterConf(util.NewVersion())
 
 	for _, r := range basicRules {
-		if r.cluster == route_rule_conf.AdvancedMode {
+		if r.GetCluster() == route_rule_conf.AdvancedMode {
 			continue
 		}
-		(*clusterConf.Config)[r.cluster] = cluster_conf.ClusterConf{
+		(*clusterConf.Config)[r.GetCluster()] = cluster_conf.ClusterConf{
 			CheckConf: newCheckConf(),
 			GslbBasic: newGslbBasicConf(),
 		}
 	}
 
 	for _, r := range advancedRules {
-		(*clusterConf.Config)[r.cluster] = cluster_conf.ClusterConf{
+		(*clusterConf.Config)[r.GetCluster()] = cluster_conf.ClusterConf{
 			CheckConf: newCheckConf(),
 			GslbBasic: newGslbBasicConf(),
 		}
@@ -298,36 +233,6 @@ func (c *ServerDataConfig) updateBfeClusterConf() {
 	}
 
 	c.bfeClusterConf = clusterConf
-}
-
-func buildCondition(host string, path string, annots map[string]string) (string, error) {
-	var statement []string
-
-	primitive, err := hostPrimitive(host)
-	if err != nil {
-		return "", err
-	}
-	if len(primitive) > 0 {
-		statement = append(statement, primitive)
-	}
-
-	primitive, err = pathPrimitive(path)
-	if err != nil {
-		return "", err
-	}
-	if len(primitive) > 0 {
-		statement = append(statement, primitive)
-	}
-
-	primitive, err = annotations.GetRouteExpression(annots)
-	if err != nil {
-		return "", err
-	}
-	if len(primitive) > 0 {
-		statement = append(statement, primitive)
-	}
-
-	return strings.Join(statement, "&&"), nil
 }
 
 func newCheckConf() *cluster_conf.BackendCheck {
@@ -349,33 +254,6 @@ func newGslbBasicConf() *cluster_conf.GslbBasicConf {
 		},
 	}
 	return gslbConf
-}
-
-// hostPrimitive builds host primitive in condition
-func hostPrimitive(host string) (string, error) {
-	if len(host) == 0 || host == "*" {
-		return "", nil
-	}
-
-	if strings.HasPrefix(host, "*.") {
-		dn := host[2:]
-		dn = strings.ReplaceAll(dn, ".", "\\.")
-		return fmt.Sprintf(`req_host_regmatch("(?i)^[^\.]+%s")`, dn), nil
-	} else {
-		return fmt.Sprintf(`req_host_in("%s")`, host), nil
-	}
-}
-
-// pathPrimitive builds path primitive in condition
-func pathPrimitive(path string) (string, error) {
-	if len(path) == 0 || path == "*" {
-		return "", nil // no restriction
-	}
-	if path[len(path)-1] == '*' {
-		return fmt.Sprintf(`req_path_element_prefix_in("%s", false)`, path[:len(path)-1]), nil
-	} else {
-		return fmt.Sprintf(`req_path_in("%s", false)`, path), nil
-	}
 }
 
 func (c *ServerDataConfig) Reload() error {

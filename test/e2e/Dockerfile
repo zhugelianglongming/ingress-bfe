@@ -15,6 +15,8 @@
 # Build
 FROM golang:1.16-alpine3.14 as builder
 
+RUN apk add build-base
+
 WORKDIR /go/src/github.com/bfenetworks/ingress-bfe
 # Copy the Go Modules manifests
 COPY go.mod go.mod
