@@ -20,13 +20,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/bfenetworks/bfe/bfe_config/bfe_route_conf/route_rule_conf"
 	"github.com/jwangsadinata/go-multimap/setmultimap"
 	netv1 "k8s.io/api/networking/v1"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	"github.com/bfenetworks/ingress-bfe/internal/bfeConfig/annotations"
-	"github.com/bfenetworks/ingress-bfe/internal/bfeConfig/util"
 )
 
 type HttpBaseCache struct {
@@ -34,7 +32,7 @@ type HttpBaseCache struct {
 	ingress2Rule *setmultimap.MultiMap
 
 	// host -> path -> rule
-	ruleMap map[string]map[string][]*BaseRule
+	RuleMap map[string]map[string][]Rule
 }
 
 type BaseCache struct {
@@ -45,39 +43,42 @@ func NewBaseCache() *BaseCache {
 	return &BaseCache{
 		HttpBaseCache{
 			ingress2Rule: setmultimap.New(),
-			ruleMap:      make(map[string]map[string][]*BaseRule),
+			RuleMap:      make(map[string]map[string][]Rule),
 		},
 	}
 }
 
-func NewBaseRule(ingress string, host string, path string, annots map[string]string, cluster string, time time.Time) *BaseRule {
+func NewBaseRule(ingress string, host string, path string, annots map[string]string, time time.Time) *BaseRule {
 	return &BaseRule{
 		Ingress:     ingress,
 		Host:        host,
 		Path:        path,
 		Annotations: annots,
-		Cluster:     cluster,
 		CreateTime:  time,
 	}
 }
 
-func (c *BaseCache) GetRules() (basicRuleList []Rule, advancedRuleList []Rule) {
-	basicBaseRuleList, advancedBaseRuleList := c.BaseRules.get()
-	for _, rule := range basicBaseRuleList {
-		basicRuleList = append(basicRuleList, rule)
-	}
-	for _, rule := range advancedBaseRuleList {
-		advancedRuleList = append(advancedRuleList, rule)
-	}
-	return
-}
-
-func (c *BaseCache) PutRule(rule Rule) error {
-	baseRule, ok := rule.(*BaseRule)
-	if !ok {
+func (c *BaseCache) putRule(rule Rule) error {
+	if _, ok := rule.(*BaseRule); !ok {
 		return nil
 	}
-	return c.BaseRules.put(baseRule)
+	return c.BaseRules.put(rule)
+}
+
+func (c *BaseCache) GetRules() []Rule {
+	var ruleList []Rule
+	for _, paths := range c.BaseRules.RuleMap {
+		for _, rules := range paths {
+			if len(rules) == 0 {
+				continue
+			}
+			ruleList = append(ruleList, rules...)
+		}
+	}
+	sort.SliceStable(ruleList, func(i, j int) bool {
+		return ruleList[i].Compare(ruleList[j])
+	})
+	return ruleList
 }
 
 func (c *BaseCache) DeleteRulesByIngress(ingress string) {
@@ -89,22 +90,33 @@ func (c *BaseCache) ContainsIngress(ingress string) bool {
 	return c.BaseRules.ingress2Rule.ContainsKey(ingress)
 }
 
-func (c *BaseCache) UpdateByIngress(ingress *netv1.Ingress) error {
+func (c *BaseCache) UpdateByIngress(_ *netv1.Ingress) error {
+	panic("should be implemented")
+}
+
+func (c *BaseCache) UpdateByIngressFramework(ingress *netv1.Ingress, beforeUpdate func() (bool, error), newRuleFunc BuildRuleFunc, afterUpdate func() error) error {
+	if ok, err := beforeUpdate(); err != nil {
+		return err
+	} else if !ok {
+		return nil
+	}
+
 	for _, rule := range ingress.Spec.Rules {
 		if rule.HTTP == nil || len(rule.HTTP.Paths) == 0 {
 			continue
 		}
 
 		for _, p := range rule.HTTP.Paths {
-			if err := addRuleToCache(c, ingress, rule.Host, p); err != nil {
+			if err := c.addRuleToBaseCache(ingress, rule.Host, p, newRuleFunc); err != nil {
 				return err
 			}
 		}
 	}
-	return nil
+
+	return afterUpdate()
 }
 
-func addRuleToCache(httpRuleCache Cache, ingress *netv1.Ingress, host string, httpPath netv1.HTTPIngressPath) error {
+func (c *BaseCache) addRuleToBaseCache(ingress *netv1.Ingress, host string, httpPath netv1.HTTPIngressPath, newRuleFunc BuildRuleFunc) error {
 	if err := checkHost(host); err != nil {
 		return err
 	}
@@ -121,72 +133,7 @@ func addRuleToCache(httpRuleCache Cache, ingress *netv1.Ingress, host string, ht
 	if httpPath.PathType == nil || *httpPath.PathType == netv1.PathTypePrefix || *httpPath.PathType == netv1.PathTypeImplementationSpecific {
 		path = path + "*"
 	}
-
-	ingressName := util.NamespacedName(ingress.Namespace, ingress.Name)
-	clusterName := util.ClusterName(ingressName, httpPath.Backend.Service)
-
-	// put rule into cache
-	err := httpRuleCache.PutRule(
-		NewBaseRule(
-			ingressName,
-			host,
-			path,
-			ingress.Annotations,
-			clusterName,
-			ingress.CreationTimestamp.Time,
-		),
-	)
-
-	return err
-}
-
-func (c *HttpBaseCache) get() (basicRuleList []*BaseRule, advancedRuleList []*BaseRule) {
-	for _, paths := range c.ruleMap {
-		for _, rules := range paths {
-			if len(rules) == 0 {
-				continue
-			}
-
-			// add host+path rule to basic rule list
-			if len(rules) == 1 && annotations.Priority(rules[0].Annotations) == annotations.PriorityBasic {
-				basicRuleList = append(basicRuleList, rules[0])
-				continue
-			}
-			// add a fake basicRule,cluster=ADVANCED_MODE
-			newRule := *rules[0]
-			newRule.Cluster = route_rule_conf.AdvancedMode
-			basicRuleList = append(basicRuleList, &newRule)
-
-			// add advanced rule
-			advancedRuleList = append(advancedRuleList, rules...)
-		}
-	}
-
-	// host: exact match over wildcard match
-	// path: long path over short path
-	sort.SliceStable(advancedRuleList, func(i, j int) bool {
-		// compare host
-		if result := comparePriority(advancedRuleList[i].Host, advancedRuleList[j].Host, wildcardHost); result != 0 {
-			return result > 0
-		}
-
-		// compare path
-		if result := comparePriority(advancedRuleList[i].Path, advancedRuleList[j].Path, wildcardPath); result != 0 {
-			return result > 0
-		}
-
-		// compare annotation
-		priority1 := annotations.Priority(advancedRuleList[i].Annotations)
-		priority2 := annotations.Priority(advancedRuleList[j].Annotations)
-		if priority1 != priority2 {
-			return priority1 > priority2
-		}
-
-		// check createTime
-		return advancedRuleList[i].CreateTime.Before(advancedRuleList[j].CreateTime)
-	})
-
-	return
+	return c.putRule(newRuleFunc(ingress, host, path))
 }
 
 func (c *HttpBaseCache) delete(ingressName string) {
@@ -194,95 +141,59 @@ func (c *HttpBaseCache) delete(ingressName string) {
 
 	// delete rules from ruleMap
 	for _, rule := range deleteRules {
-		rule := rule.(*BaseRule)
-		rules, ok := c.ruleMap[rule.Host][rule.Path]
+		rule := rule.(Rule)
+		rules, ok := c.RuleMap[rule.GetHost()][rule.GetPath()]
 		if !ok {
 			continue
 		}
-		c.ruleMap[rule.Host][rule.Path] = delRule(rules, ingressName)
-		if len(c.ruleMap[rule.Host][rule.Path]) == 0 {
-			delete(c.ruleMap[rule.Host], rule.Path)
+		c.RuleMap[rule.GetHost()][rule.GetPath()] = delRule(rules, ingressName)
+		if len(c.RuleMap[rule.GetHost()][rule.GetPath()]) == 0 {
+			delete(c.RuleMap[rule.GetHost()], rule.GetPath())
 		}
-		if len(c.ruleMap[rule.Host]) == 0 {
-			delete(c.ruleMap, rule.Host)
+		if len(c.RuleMap[rule.GetHost()]) == 0 {
+			delete(c.RuleMap, rule.GetHost())
 		}
 	}
 
 	c.ingress2Rule.RemoveAll(ingressName)
 }
 
-func (c *HttpBaseCache) put(rule *BaseRule) error {
-	if _, ok := c.ruleMap[rule.Host]; !ok {
-		c.ruleMap[rule.Host] = make(map[string][]*BaseRule)
+func (c *HttpBaseCache) put(rule Rule) error {
+	if _, ok := c.RuleMap[rule.GetHost()]; !ok {
+		c.RuleMap[rule.GetHost()] = make(map[string][]Rule)
 	}
 
-	for i, r := range c.ruleMap[rule.Host][rule.Path] {
-		if annotations.Equal(rule.Annotations, r.Annotations) {
+	for i, r := range c.RuleMap[rule.GetHost()][rule.GetPath()] {
+		if annotations.Equal(rule.GetAnnotations(), r.GetAnnotations()) {
 			// all conditions are same, oldest rule is valid
-			if rule.CreateTime.Before(r.CreateTime) {
-				log.Log.V(0).Info("rule is overwritten by elder ingress", "ingress", r.Ingress, "host", r.Host, "path", r.Path, "old-ingress", rule.Ingress)
+			if rule.GetCreateTime().Before(r.GetCreateTime()) {
+				log.Log.V(0).Info("rule is overwritten by elder ingress", "ingress", r.GetIngress(), "host", r.GetHost(), "path", r.GetPath(), "old-ingress", rule.GetIngress())
 
-				c.ingress2Rule.Remove(rule.Ingress, c.ruleMap[rule.Host][rule.Path][i])
-				c.ruleMap[rule.Host][rule.Path][i] = rule
-				c.ingress2Rule.Put(rule.Ingress, rule)
+				c.ingress2Rule.Remove(rule.GetIngress(), c.RuleMap[rule.GetHost()][rule.GetPath()][i])
+				c.RuleMap[rule.GetHost()][rule.GetPath()][i] = rule
+				c.ingress2Rule.Put(rule.GetIngress(), rule)
 				return nil
-			} else if rule.CreateTime.Equal(r.CreateTime) {
+			} else if rule.GetCreateTime().Equal(r.GetCreateTime()) {
 				return nil
 			} else {
-				return fmt.Errorf("ingress [%s] conflict with existing %s, rule [host: %s, path: %s]", rule.Ingress, r.Ingress, rule.Host, rule.Path)
+				return fmt.Errorf("ingress [%s] conflict with existing %s, rule [host: %s, path: %s]", rule.GetIngress(), r.GetIngress(), rule.GetHost(), rule.GetPath())
 			}
 		}
 	}
-	c.ingress2Rule.Put(rule.Ingress, rule)
-	c.ruleMap[rule.Host][rule.Path] = append(c.ruleMap[rule.Host][rule.Path], rule)
+	c.ingress2Rule.Put(rule.GetIngress(), rule)
+	c.RuleMap[rule.GetHost()][rule.GetPath()] = append(c.RuleMap[rule.GetHost()][rule.GetPath()], rule)
 
 	return nil
 }
 
-func delRule(ruleList []*BaseRule, ingress string) []*BaseRule {
-	var result []*BaseRule
+func delRule(ruleList []Rule, ingress string) []Rule {
+	var result []Rule
 	for _, rule := range ruleList {
-		if rule.Ingress != ingress {
+		if rule.GetIngress() != ingress {
 			result = append(result, rule)
 		}
 	}
 	return result
-}
-
-func comparePriority(str1, str2 string, wildcard func(string) bool) int {
-	// non-wildcard has higher priority
-	if !wildcard(str1) && wildcard(str2) {
-		return 1
-	}
-	if wildcard(str1) && !wildcard(str2) {
-		return -1
-	}
-
-	// longer host has higher priority
-	if len(str1) > len(str2) {
-		return 1
-	} else if len(str1) == len(str2) {
-		return 0
-	} else {
-		return -1
-	}
-
-}
-
-func wildcardPath(path string) bool {
-	if len(path) > 0 && strings.HasSuffix(path, "*") {
-		return true
-	}
-
-	return false
-}
-
-func wildcardHost(host string) bool {
-	if len(host) > 0 && strings.HasPrefix(host, "*.") {
-		return true
-	}
-
-	return false
 }
 
 func checkHost(host string) error {

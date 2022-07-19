@@ -15,50 +15,25 @@
 package annotations
 
 import (
-	"errors"
 	"fmt"
 	"strconv"
 )
 
 const (
-	redirectAnnotationPrefix = BfeAnnotationPrefix + "redirect."
+	redirectAnnotationPrefix          = BfeAnnotationPrefix + "redirect."
+	defaultRedirectResponseStatusCode = 302
+)
 
+// the annotations related to how to set the location in the redirection response's header
+const (
 	RedirectURLSetAnnotation       = redirectAnnotationPrefix + "url-set"
 	RedirectURLFromQueryAnnotation = redirectAnnotationPrefix + "url-from-query"
 	RedirectURLPrefixAddAnnotation = redirectAnnotationPrefix + "url-prefix-add"
 	RedirectSchemeSetSetAnnotation = redirectAnnotationPrefix + "scheme-set"
-
-	RedirectResponseStatusAnnotation = redirectAnnotationPrefix + "response-status"
 )
 
-const (
-	defaultRedirectResponseStatusCode = 302
-)
-
-func HasRedirectAnnotations(annotations map[string]string) (bool, error) {
-	annotationList := []string{RedirectURLSetAnnotation, RedirectURLFromQueryAnnotation, RedirectURLPrefixAddAnnotation, RedirectSchemeSetSetAnnotation}
-
-	cnt := 0
-	for _, annotation := range annotationList {
-		if _, ok := annotations[annotation]; ok {
-			cnt++
-		}
-	}
-
-	switch {
-	case cnt == 0:
-		if annotations[RedirectResponseStatusAnnotation] != "" {
-			return false, fmt.Errorf("unexpected annotation: {%s:%s}", RedirectResponseStatusAnnotation, annotations[RedirectResponseStatusAnnotation])
-		}
-		return false, nil
-
-	case cnt == 1:
-		return true, nil
-
-	default:
-		return false, errors.New("setting multiple redirection-related annotations at the same time is not supported")
-	}
-}
+// RedirectResponseStatusAnnotation is used to set the status code of the redirection response manually
+const RedirectResponseStatusAnnotation = redirectAnnotationPrefix + "response-status"
 
 // GetRedirectAction try to parse the cmd and the param of the redirection action from the annotations
 func GetRedirectAction(annotations map[string]string) (cmd, param string, err error) {
@@ -86,6 +61,7 @@ func GetRedirectStatusCode(annotations map[string]string) (int, error) {
 
 	statusCodeInt64, err := strconv.ParseInt(statusCodeStr, 10, 64)
 	if err != nil || !(statusCodeInt64 >= 300 && statusCodeInt64 <= 399) {
+		// TODO enum 301 302 303 307 308
 		return 0, fmt.Errorf("the annotation %s should be an integer number with format 3XX", RedirectResponseStatusAnnotation)
 	}
 	return int(statusCodeInt64), nil

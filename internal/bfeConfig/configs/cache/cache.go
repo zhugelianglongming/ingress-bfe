@@ -14,19 +14,20 @@
 
 package cache
 
-import (
-	netv1 "k8s.io/api/networking/v1"
-)
+import netv1 "k8s.io/api/networking/v1"
 
+// Cache is an abstraction of the cache of Rules.
 type Cache interface {
-	GetRules() (basicRuleList []Rule, advancedRuleList []Rule)
+	// GetRules gets the rules stored in the cache.
+	// These rules are usually ordered by priority.
+	GetRules() []Rule
 
-	PutRule(rule Rule) error
+	// UpdateByIngress uses an ingress to update the cache
+	UpdateByIngress(ingress *netv1.Ingress) error
 
+	// DeleteRulesByIngress delete everything related to the ingress from the cache
 	DeleteRulesByIngress(ingress string)
 
 	// ContainsIngress returns true if ingress exist in cache
 	ContainsIngress(ingress string) bool
-
-	UpdateByIngress(ingress *netv1.Ingress) error
 }

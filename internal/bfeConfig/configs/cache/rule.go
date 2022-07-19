@@ -14,10 +14,40 @@
 
 package cache
 
+import (
+	"time"
+
+	netv1 "k8s.io/api/networking/v1"
+)
+
+// Rule is an abstraction of BFE Rule.
+// The BFE Rule is the basis for BFE Engine to process a Request.
+// For example, the route module need to use route rules to detect which
+// backend service to route a Request to;
+// the redirect module need to use redirect rules to decide
+// if a Request should be redirected, and how.
+// The route rule and redirect rule are both Rules.
 type Rule interface {
+	// GetIngress gets the namespaced name of the ingress to which the Rule belongs
 	GetIngress() string
+
+	// GetHost gets the host of the Rule
 	GetHost() string
+
+	// GetPath gets the path of the Rule
 	GetPath() string
+
+	// GetAnnotations gets the annotations of the ingress to which the Rule belongs
 	GetAnnotations() map[string]string
-	GetCluster() string
+
+	// GetCreateTime gets the created time of the Rule
+	GetCreateTime() time.Time
+
+	// Compare will be used to prioritize rules
+	Compare(anotherRule Rule) bool
+
+	// GetCond generates a BFE Condition from the Rule
+	GetCond() (string, error)
 }
+
+type BuildRuleFunc func(ingress *netv1.Ingress, host, path string) Rule

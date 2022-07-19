@@ -67,7 +67,7 @@ func Test_putBasic(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := cache.PutRule(tt.args)
+			err := cache.putRule(tt.args)
 			if tt.want != (err == nil) {
 				t.Errorf("routeRuleCache.Put() [%s] test fail", tt.name)
 			}
@@ -172,7 +172,7 @@ func Test_putAdvanced(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := cache.PutRule(tt.args)
+			err := cache.putRule(tt.args)
 			if tt.want != (err == nil) {
 				t.Errorf("routeRuleCache.Put() test fail, name=%s", tt.name)
 			}
@@ -219,7 +219,7 @@ func Test_sortRule(t *testing.T) {
 			cache := NewBaseCache()
 
 			for _, r := range tt.args {
-				cache.PutRule(r)
+				cache.putRule(r)
 			}
 			_, advancedList := cache.GetRules()
 
@@ -258,7 +258,7 @@ func Test_deleteRule(t *testing.T) {
 			cache := NewBaseCache()
 
 			for _, r := range tt.args {
-				cache.PutRule(r)
+				cache.putRule(r)
 			}
 			cache.DeleteRulesByIngress(tt.del)
 

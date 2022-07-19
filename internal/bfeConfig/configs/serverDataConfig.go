@@ -17,8 +17,6 @@ package configs
 import (
 	"fmt"
 
-	"github.com/bfenetworks/ingress-bfe/internal/bfeConfig/configs/cache"
-	"github.com/bfenetworks/ingress-bfe/internal/bfeConfig/configs/condition"
 	netv1 "k8s.io/api/networking/v1"
 
 	"github.com/bfenetworks/bfe/bfe_config/bfe_cluster_conf/cluster_conf"
@@ -44,7 +42,7 @@ type ServerDataConfig struct {
 	routeTableVersion     string
 	bfeClusterConfVersion string
 
-	routeRuleCache cache.Cache
+	routeRuleCache *RouteRuleCache
 
 	hostTableConf  *host_rule_conf.HostTableConf
 	routeTableFile *route_rule_conf.RouteTableFile
@@ -53,7 +51,7 @@ type ServerDataConfig struct {
 
 func NewServerDataConfig(version string) *ServerDataConfig {
 	return &ServerDataConfig{
-		routeRuleCache: cache.NewBaseCache(),
+		routeRuleCache: NewRouteRuleCache(),
 		hostTableConf:  newHostTableConf(version),
 		routeTableFile: newRouteTableConfFile(version),
 		bfeClusterConf: newBfeClusterConf(version),
@@ -152,12 +150,12 @@ func (c *ServerDataConfig) updateCache(ingress *netv1.Ingress) error {
 }
 
 func (c *ServerDataConfig) updateRouteTable() error {
-	basicRules, advancedRules := c.routeRuleCache.GetRules()
+	basicRules, advancedRules := c.routeRuleCache.GetRouteRules()
 
 	routeTableFile := newRouteTableConfFile(util.NewVersion())
 	for _, rule := range basicRules {
 		ruleFile := route_rule_conf.BasicRouteRuleFile{
-			ClusterName: util.StrPtr(rule.GetCluster()),
+			ClusterName: util.StrPtr(rule.Cluster),
 		}
 
 		if len(rule.GetHost()) > 0 && rule.GetHost() != "*" {
@@ -173,13 +171,13 @@ func (c *ServerDataConfig) updateRouteTable() error {
 	}
 
 	for _, rule := range advancedRules {
-		condition, err := condition.BuildCondition(rule.GetHost(), rule.GetPath(), rule.GetAnnotations())
+		condition, err := rule.GetCond()
 		if err != nil {
 			return err
 		}
 		ruleFile := route_rule_conf.AdvancedRouteRuleFile{
 			Cond:        &condition,
-			ClusterName: util.StrPtr(rule.GetCluster()),
+			ClusterName: util.StrPtr(rule.Cluster),
 		}
 		(*routeTableFile.ProductRule)[DefaultProduct] = append((*routeTableFile.ProductRule)[DefaultProduct], ruleFile)
 	}
@@ -205,22 +203,22 @@ func (c *ServerDataConfig) updateRouteTable() error {
 }
 
 func (c *ServerDataConfig) updateBfeClusterConf() {
-	basicRules, advancedRules := c.routeRuleCache.GetRules()
+	basicRules, advancedRules := c.routeRuleCache.GetRouteRules()
 
 	clusterConf := newBfeClusterConf(util.NewVersion())
 
 	for _, r := range basicRules {
-		if r.GetCluster() == route_rule_conf.AdvancedMode {
+		if r.Cluster == route_rule_conf.AdvancedMode {
 			continue
 		}
-		(*clusterConf.Config)[r.GetCluster()] = cluster_conf.ClusterConf{
+		(*clusterConf.Config)[r.Cluster] = cluster_conf.ClusterConf{
 			CheckConf: newCheckConf(),
 			GslbBasic: newGslbBasicConf(),
 		}
 	}
 
 	for _, r := range advancedRules {
-		(*clusterConf.Config)[r.GetCluster()] = cluster_conf.ClusterConf{
+		(*clusterConf.Config)[r.Cluster] = cluster_conf.ClusterConf{
 			CheckConf: newCheckConf(),
 			GslbBasic: newGslbBasicConf(),
 		}

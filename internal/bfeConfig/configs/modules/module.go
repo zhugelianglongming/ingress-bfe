@@ -15,19 +15,29 @@
 package modules
 
 import (
+	"github.com/bfenetworks/ingress-bfe/internal/bfeConfig/configs/modules/redirect"
 	netv1 "k8s.io/api/networking/v1"
 )
 
+// BFEModuleConfig is an abstraction of the BFE module configuration.
+// The ConfigBuilder will call the corresponding function in this interface when update/delete ingresses or reload the BFE Engine.
 type BFEModuleConfig interface {
+	// UpdateIngress uses the ingress to update the BFEModuleConfig
 	UpdateIngress(ingress *netv1.Ingress) error
+
+	// DeleteIngress delete everything related to the ingress from the BFEModuleConfig
 	DeleteIngress(ingressNamespace, ingressName string)
+
+	// Reload dumps the data in the BFEModuleConfig to the corresponding BFE conf files on the disk
 	Reload() error
+
+	// Name returns the name of the BFEModuleConfig
 	Name() string
 }
 
 type NewBFEModuleConfigFunc = func(version string) BFEModuleConfig
 
-var initFuncList = []NewBFEModuleConfigFunc{NewRedirectConfig}
+var initFuncList = []NewBFEModuleConfigFunc{redirect.NewRedirectConfig}
 
 func InitBFEModules(version string) []BFEModuleConfig {
 	var modules []BFEModuleConfig
