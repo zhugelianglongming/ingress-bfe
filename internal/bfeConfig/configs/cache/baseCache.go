@@ -27,7 +27,7 @@ import (
 	"github.com/bfenetworks/ingress-bfe/internal/bfeConfig/annotations"
 )
 
-type HttpBaseCache struct {
+type httpBaseCache struct {
 	// ingress -> rules
 	ingress2Rule *setmultimap.MultiMap
 
@@ -36,12 +36,12 @@ type HttpBaseCache struct {
 }
 
 type BaseCache struct {
-	BaseRules HttpBaseCache
+	BaseRules httpBaseCache
 }
 
 func NewBaseCache() *BaseCache {
 	return &BaseCache{
-		HttpBaseCache{
+		httpBaseCache{
 			ingress2Rule: setmultimap.New(),
 			RuleMap:      make(map[string]map[string][]Rule),
 		},
@@ -58,10 +58,7 @@ func NewBaseRule(ingress string, host string, path string, annots map[string]str
 	}
 }
 
-func (c *BaseCache) putRule(rule Rule) error {
-	if _, ok := rule.(*BaseRule); !ok {
-		return nil
-	}
+func (c *BaseCache) PutRule(rule Rule) error {
 	return c.BaseRules.put(rule)
 }
 
@@ -76,12 +73,12 @@ func (c *BaseCache) GetRules() []Rule {
 		}
 	}
 	sort.SliceStable(ruleList, func(i, j int) bool {
-		return ruleList[i].Compare(ruleList[j])
+		return CompareRule(ruleList[i], ruleList[j])
 	})
 	return ruleList
 }
 
-func (c *BaseCache) DeleteRulesByIngress(ingress string) {
+func (c *BaseCache) DeleteByIngress(ingress string) {
 	c.BaseRules.delete(ingress)
 }
 
@@ -95,10 +92,12 @@ func (c *BaseCache) UpdateByIngress(_ *netv1.Ingress) error {
 }
 
 func (c *BaseCache) UpdateByIngressFramework(ingress *netv1.Ingress, beforeUpdate func() (bool, error), newRuleFunc BuildRuleFunc, afterUpdate func() error) error {
-	if ok, err := beforeUpdate(); err != nil {
-		return err
-	} else if !ok {
-		return nil
+	if beforeUpdate != nil {
+		if ok, err := beforeUpdate(); err != nil {
+			return err
+		} else if !ok {
+			return nil
+		}
 	}
 
 	for _, rule := range ingress.Spec.Rules {
@@ -113,7 +112,10 @@ func (c *BaseCache) UpdateByIngressFramework(ingress *netv1.Ingress, beforeUpdat
 		}
 	}
 
-	return afterUpdate()
+	if afterUpdate != nil {
+		return afterUpdate()
+	}
+	return nil
 }
 
 func (c *BaseCache) addRuleToBaseCache(ingress *netv1.Ingress, host string, httpPath netv1.HTTPIngressPath, newRuleFunc BuildRuleFunc) error {
@@ -133,10 +135,11 @@ func (c *BaseCache) addRuleToBaseCache(ingress *netv1.Ingress, host string, http
 	if httpPath.PathType == nil || *httpPath.PathType == netv1.PathTypePrefix || *httpPath.PathType == netv1.PathTypeImplementationSpecific {
 		path = path + "*"
 	}
-	return c.putRule(newRuleFunc(ingress, host, path))
+	rule := newRuleFunc(ingress, host, path)
+	return c.BaseRules.put(rule)
 }
 
-func (c *HttpBaseCache) delete(ingressName string) {
+func (c *httpBaseCache) delete(ingressName string) {
 	deleteRules, _ := c.ingress2Rule.Get(ingressName)
 
 	// delete rules from ruleMap
@@ -158,7 +161,7 @@ func (c *HttpBaseCache) delete(ingressName string) {
 	c.ingress2Rule.RemoveAll(ingressName)
 }
 
-func (c *HttpBaseCache) put(rule Rule) error {
+func (c *httpBaseCache) put(rule Rule) error {
 	if _, ok := c.RuleMap[rule.GetHost()]; !ok {
 		c.RuleMap[rule.GetHost()] = make(map[string][]Rule)
 	}

@@ -51,7 +51,7 @@ type ServerDataConfig struct {
 
 func NewServerDataConfig(version string) *ServerDataConfig {
 	return &ServerDataConfig{
-		routeRuleCache: NewRouteRuleCache(),
+		routeRuleCache: newRouteRuleCache(),
 		hostTableConf:  newHostTableConf(version),
 		routeTableFile: newRouteTableConfFile(version),
 		bfeClusterConf: newBfeClusterConf(version),
@@ -114,17 +114,17 @@ func (c *ServerDataConfig) UpdateIngress(ingress *netv1.Ingress) error {
 
 	//delete existing ingress
 	if c.routeRuleCache.ContainsIngress(ingressName) {
-		c.routeRuleCache.DeleteRulesByIngress(ingressName)
+		c.routeRuleCache.DeleteByIngress(ingressName)
 	}
 
 	if err := c.updateCache(ingress); err != nil {
 		// delete rules which have been inserted
-		c.routeRuleCache.DeleteRulesByIngress(ingressName)
+		c.routeRuleCache.DeleteByIngress(ingressName)
 		return err
 	}
 
 	if err := c.updateRouteTable(); err != nil {
-		c.routeRuleCache.DeleteRulesByIngress(ingressName)
+		c.routeRuleCache.DeleteByIngress(ingressName)
 		return err
 	}
 
@@ -140,7 +140,7 @@ func (c *ServerDataConfig) DeleteIngress(namespace, name string) {
 		return
 	}
 
-	c.routeRuleCache.DeleteRulesByIngress(ingressName)
+	c.routeRuleCache.DeleteByIngress(ingressName)
 	c.updateRouteTable()
 	c.updateBfeClusterConf()
 }
@@ -150,7 +150,7 @@ func (c *ServerDataConfig) updateCache(ingress *netv1.Ingress) error {
 }
 
 func (c *ServerDataConfig) updateRouteTable() error {
-	basicRules, advancedRules := c.routeRuleCache.GetRouteRules()
+	basicRules, advancedRules := c.routeRuleCache.getRouteRules()
 
 	routeTableFile := newRouteTableConfFile(util.NewVersion())
 	for _, rule := range basicRules {
@@ -203,7 +203,7 @@ func (c *ServerDataConfig) updateRouteTable() error {
 }
 
 func (c *ServerDataConfig) updateBfeClusterConf() {
-	basicRules, advancedRules := c.routeRuleCache.GetRouteRules()
+	basicRules, advancedRules := c.routeRuleCache.getRouteRules()
 
 	clusterConf := newBfeClusterConf(util.NewVersion())
 

@@ -18,11 +18,9 @@ import (
 	"fmt"
 
 	"github.com/bfenetworks/bfe/bfe_modules/mod_redirect"
-	"github.com/bfenetworks/ingress-bfe/internal/bfeConfig/configs/modules"
 	netv1 "k8s.io/api/networking/v1"
 
 	"github.com/bfenetworks/ingress-bfe/internal/bfeConfig/configs"
-	"github.com/bfenetworks/ingress-bfe/internal/bfeConfig/configs/cache"
 	"github.com/bfenetworks/ingress-bfe/internal/bfeConfig/util"
 )
 
@@ -33,11 +31,11 @@ const (
 
 type ModRedirectConfig struct {
 	version           string
-	redirectRuleCache cache.Cache
+	redirectRuleCache *redirectRuleCache
 	redirectConfFile  *mod_redirect.RedirectConfFile
 }
 
-func NewRedirectConfig(version string) modules.BFEModuleConfig {
+func NewRedirectConfig(version string) *ModRedirectConfig {
 	return &ModRedirectConfig{
 		version:           version,
 		redirectRuleCache: newRedirectRuleCache(),
@@ -62,7 +60,7 @@ func (r *ModRedirectConfig) UpdateIngress(ingress *netv1.Ingress) error {
 
 	ingressName := util.NamespacedName(ingress.Namespace, ingress.Name)
 	if r.redirectRuleCache.ContainsIngress(ingressName) {
-		r.redirectRuleCache.DeleteRulesByIngress(ingressName)
+		r.redirectRuleCache.DeleteByIngress(ingressName)
 	}
 
 	// update cache
@@ -72,7 +70,7 @@ func (r *ModRedirectConfig) UpdateIngress(ingress *netv1.Ingress) error {
 
 	redirectConfFile, err := r.getRedirectTable()
 	if err != nil {
-		r.redirectRuleCache.DeleteRulesByIngress(ingressName)
+		r.redirectRuleCache.DeleteByIngress(ingressName)
 		return err
 	}
 	r.redirectConfFile = redirectConfFile
@@ -111,7 +109,7 @@ func (r *ModRedirectConfig) DeleteIngress(namespace, name string) {
 		return
 	}
 
-	r.redirectRuleCache.DeleteRulesByIngress(ingressName)
+	r.redirectRuleCache.DeleteByIngress(ingressName)
 	r.getRedirectTable()
 }
 

@@ -16,13 +16,14 @@ package configs
 
 import (
 	"sort"
+	"time"
 
 	"github.com/bfenetworks/bfe/bfe_config/bfe_route_conf/route_rule_conf"
+	"github.com/bfenetworks/ingress-bfe/internal/bfeConfig/util"
 	netv1 "k8s.io/api/networking/v1"
 
 	"github.com/bfenetworks/ingress-bfe/internal/bfeConfig/annotations"
 	"github.com/bfenetworks/ingress-bfe/internal/bfeConfig/configs/cache"
-	"github.com/bfenetworks/ingress-bfe/internal/bfeConfig/util"
 )
 
 type httpRule struct {
@@ -34,32 +35,45 @@ type RouteRuleCache struct {
 	*cache.BaseCache
 }
 
-func NewRouteRuleCache() *RouteRuleCache {
+func newRouteRuleCache() *RouteRuleCache {
 	return &RouteRuleCache{
 		BaseCache: cache.NewBaseCache(),
 	}
 }
 
-func (routeRuleCache *RouteRuleCache) GetRouteRules() (basicRuleList []*httpRule, advancedRuleList []*httpRule) {
-	c := routeRuleCache.BaseRules
-	for _, paths := range c.RuleMap {
-		for _, rules := range paths {
-			if len(rules) == 0 {
+func newRouteRule(ingress string, host string, path string, annots map[string]string, cluster string, time time.Time) *httpRule {
+	return &httpRule{
+		BaseRule: cache.NewBaseRule(
+			ingress,
+			host,
+			path,
+			annots,
+			time,
+		),
+		Cluster: cluster,
+	}
+}
+
+func (c *RouteRuleCache) getRouteRules() (basicRuleList []*httpRule, advancedRuleList []*httpRule) {
+	httpRules := c.BaseRules
+	for _, paths := range httpRules.RuleMap {
+		for _, ruleList := range paths {
+			if len(ruleList) == 0 {
 				continue
 			}
 
 			// add host+path rule to basic rule list
-			if len(rules) == 1 && annotations.Priority(rules[0].GetAnnotations()) == annotations.PriorityBasic {
-				basicRuleList = append(basicRuleList, rules[0].(*httpRule))
+			if len(ruleList) == 1 && annotations.Priority(ruleList[0].GetAnnotations()) == annotations.PriorityBasic {
+				basicRuleList = append(basicRuleList, ruleList[0].(*httpRule))
 				continue
 			}
 			// add a fake basicRule,cluster=ADVANCED_MODE
-			newRule := *rules[0].(*httpRule)
+			newRule := *ruleList[0].(*httpRule)
 			newRule.Cluster = route_rule_conf.AdvancedMode
 			basicRuleList = append(basicRuleList, &newRule)
 
 			// add advanced rule
-			for _, rule := range rules {
+			for _, rule := range ruleList {
 				advancedRuleList = append(advancedRuleList, rule.(*httpRule))
 			}
 		}
@@ -68,32 +82,26 @@ func (routeRuleCache *RouteRuleCache) GetRouteRules() (basicRuleList []*httpRule
 	// host: exact match over wildcard match
 	// path: long path over short path
 	sort.SliceStable(advancedRuleList, func(i, j int) bool {
-		return advancedRuleList[i].Compare(advancedRuleList[j])
+		return cache.CompareRule(advancedRuleList[i], advancedRuleList[j])
 	})
 
 	return
 }
 
-func (routeRuleCache *RouteRuleCache) UpdateByIngress(ingress *netv1.Ingress) error {
-	return routeRuleCache.BaseCache.UpdateByIngressFramework(
+func (c *RouteRuleCache) UpdateByIngress(ingress *netv1.Ingress) error {
+	return c.BaseCache.UpdateByIngressFramework(
 		ingress,
-		func() (bool, error) {
-			return true, nil
-		},
+		nil,
 		func(ingress *netv1.Ingress, host, path string) cache.Rule {
-			return &httpRule{
-				BaseRule: cache.NewBaseRule(
-					util.NamespacedName(ingress.Namespace, ingress.Name),
-					host,
-					path,
-					ingress.Annotations,
-					ingress.CreationTimestamp.Time,
-				),
-				Cluster: ingress.ClusterName,
-			}
+			return newRouteRule(
+				util.NamespacedName(ingress.Namespace, ingress.Name),
+				host,
+				path,
+				ingress.Annotations,
+				ingress.ClusterName,
+				ingress.CreationTimestamp.Time,
+			)
 		},
-		func() error {
-			return nil
-		},
+		nil,
 	)
 }

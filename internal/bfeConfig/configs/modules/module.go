@@ -35,14 +35,9 @@ type BFEModuleConfig interface {
 	Name() string
 }
 
-type NewBFEModuleConfigFunc = func(version string) BFEModuleConfig
-
-var initFuncList = []NewBFEModuleConfigFunc{redirect.NewRedirectConfig}
-
 func InitBFEModules(version string) []BFEModuleConfig {
 	var modules []BFEModuleConfig
-	for _, initFunc := range initFuncList {
-		modules = append(modules, initFunc(version))
-	}
+	// mod_redirect
+	modules = append(modules, redirect.NewRedirectConfig(version))
 	return modules
 }

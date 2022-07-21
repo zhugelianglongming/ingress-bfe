@@ -50,69 +50,8 @@ func (rule BaseRule) GetCreateTime() time.Time {
 	return rule.CreateTime
 }
 
-func (rule BaseRule) Compare(anotherRule Rule) bool {
-	// host: exact match over wildcard match
-	// path: long path over short path
-
-	// compare host
-	if result := comparePriority(rule.Host, anotherRule.GetHost(), wildcardHost); result != 0 {
-		return result > 0
-	}
-
-	// compare path
-	if result := comparePriority(rule.Path, anotherRule.GetPath(), wildcardPath); result != 0 {
-		return result > 0
-	}
-
-	// compare annotation
-	priority1 := annotations.Priority(rule.Annotations)
-	priority2 := annotations.Priority(anotherRule.GetAnnotations())
-	if priority1 != priority2 {
-		return priority1 > priority2
-	}
-
-	// check createTime
-	return rule.CreateTime.Before(anotherRule.GetCreateTime())
-}
-
 func (rule BaseRule) GetCond() (string, error) {
 	return buildCondition(rule.Host, rule.Path, rule.Annotations)
-}
-
-func comparePriority(str1, str2 string, wildcard func(string) bool) int {
-	// non-wildcard has higher priority
-	if !wildcard(str1) && wildcard(str2) {
-		return 1
-	}
-	if wildcard(str1) && !wildcard(str2) {
-		return -1
-	}
-
-	// longer host has higher priority
-	if len(str1) > len(str2) {
-		return 1
-	} else if len(str1) == len(str2) {
-		return 0
-	} else {
-		return -1
-	}
-
-}
-
-func wildcardPath(path string) bool {
-	if len(path) > 0 && strings.HasSuffix(path, "*") {
-		return true
-	}
-
-	return false
-}
-
-func wildcardHost(host string) bool {
-	if len(host) > 0 && strings.HasPrefix(host, "*.") {
-		return true
-	}
-
-	return false
 }
 
 func buildCondition(host string, path string, annots map[string]string) (string, error) {

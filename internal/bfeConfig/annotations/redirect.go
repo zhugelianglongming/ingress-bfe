@@ -59,10 +59,18 @@ func GetRedirectStatusCode(annotations map[string]string) (int, error) {
 		return defaultRedirectResponseStatusCode, nil
 	}
 
+	checkStatusCode := func(code int64) bool {
+		for _, v := range []int64{301, 302, 303, 307, 308} {
+			if code == v {
+				return true
+			}
+		}
+		return false
+	}
+
 	statusCodeInt64, err := strconv.ParseInt(statusCodeStr, 10, 64)
-	if err != nil || !(statusCodeInt64 >= 300 && statusCodeInt64 <= 399) {
-		// TODO enum 301 302 303 307 308
-		return 0, fmt.Errorf("the annotation %s should be an integer number with format 3XX", RedirectResponseStatusAnnotation)
+	if err != nil || !checkStatusCode(statusCodeInt64) {
+		return 0, fmt.Errorf("the annotation %s should be 301, 302, 303, 307 or 308", RedirectResponseStatusAnnotation)
 	}
 	return int(statusCodeInt64), nil
 }

@@ -29,7 +29,7 @@ Feature: Redirect
                       number: 3000
     """
     And The Ingress status shows the IP address or FQDN where it is exposed
-    When I send a request to "http://foo.com/bar"
+    When I send a "GET" request to "http://foo.com/bar"
     Then the response status-code must be 302
     And the response location must be "https://www.baidu.com"
 
@@ -58,7 +58,7 @@ Feature: Redirect
                       number: 3000
     """
     And The Ingress status shows the IP address or FQDN where it is exposed
-    When I send a request to "http://foo.com/bar"
+    When I send a "GET" request to "http://foo.com/bar"
     Then the response status-code must be 301
     And the response location must be "https://www.baidu.com"
 
@@ -86,7 +86,7 @@ Feature: Redirect
                       number: 3000
     """
     And The Ingress status shows the IP address or FQDN where it is exposed
-    When I send a request to "http://foo.com/bar?location=https://www.baidu.com"
+    When I send a "GET" request to "http://foo.com/bar?location=https://www.baidu.com"
     Then the response status-code must be 302
     And the response location must be "https://www.baidu.com"
 
@@ -115,7 +115,7 @@ Feature: Redirect
                       number: 3000
     """
     And The Ingress status shows the IP address or FQDN where it is exposed
-    When I send a request to "http://foo.com/bar?location=https://www.baidu.com"
+    When I send a "GET" request to "http://foo.com/bar?location=https://www.baidu.com"
     Then the response status-code must be 301
     And the response location must be "https://www.baidu.com"
 
@@ -143,7 +143,7 @@ Feature: Redirect
                       number: 3000
     """
     And The Ingress status shows the IP address or FQDN where it is exposed
-    When I send a request to "http://foo.com/bar"
+    When I send a "GET" request to "http://foo.com/bar"
     Then the response status-code must be 302
     And the response location must be "https://new.org/api/bar"
 
@@ -172,7 +172,7 @@ Feature: Redirect
                       number: 3000
     """
     And The Ingress status shows the IP address or FQDN where it is exposed
-    When I send a request to "http://foo.com/bar"
+    When I send a "GET" request to "http://foo.com/bar"
     Then the response status-code must be 301
     And the response location must be "https://new.org/api/bar"
 
@@ -200,7 +200,7 @@ Feature: Redirect
                       number: 3000
     """
     And The Ingress status shows the IP address or FQDN where it is exposed
-    When I send a request to "http://foo.com/bar"
+    When I send a "GET" request to "http://foo.com/bar"
     Then the response status-code must be 302
     And the response location must be "https://foo.com/bar"
 
@@ -229,7 +229,7 @@ Feature: Redirect
                       number: 3000
     """
     And The Ingress status shows the IP address or FQDN where it is exposed
-    When I send a request to "http://foo.com/bar"
+    When I send a "GET" request to "http://foo.com/bar"
     Then the response status-code must be 301
     And the response location must be "https://foo.com/bar"
 

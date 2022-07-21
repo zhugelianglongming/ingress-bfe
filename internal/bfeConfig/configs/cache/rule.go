@@ -15,9 +15,12 @@
 package cache
 
 import (
+	"strings"
 	"time"
 
 	netv1 "k8s.io/api/networking/v1"
+
+	"github.com/bfenetworks/ingress-bfe/internal/bfeConfig/annotations"
 )
 
 // Rule is an abstraction of BFE Rule.
@@ -43,11 +46,71 @@ type Rule interface {
 	// GetCreateTime gets the created time of the Rule
 	GetCreateTime() time.Time
 
-	// Compare will be used to prioritize rules
-	Compare(anotherRule Rule) bool
-
 	// GetCond generates a BFE Condition from the Rule
 	GetCond() (string, error)
 }
 
 type BuildRuleFunc func(ingress *netv1.Ingress, host, path string) Rule
+
+// CompareRule compares the priority of two Rules.
+// The function can be used to sort a Rule list.
+func CompareRule(rule1, rule2 Rule) bool {
+	// host: exact match over wildcard match
+	// path: long path over short path
+
+	// compare host
+	if result := comparePriority(rule1.GetHost(), rule2.GetHost(), wildcardHost); result != 0 {
+		return result > 0
+	}
+
+	// compare path
+	if result := comparePriority(rule1.GetPath(), rule2.GetPath(), wildcardPath); result != 0 {
+		return result > 0
+	}
+
+	// compare annotation
+	priority1 := annotations.Priority(rule1.GetAnnotations())
+	priority2 := annotations.Priority(rule2.GetAnnotations())
+	if priority1 != priority2 {
+		return priority1 > priority2
+	}
+
+	// check createTime
+	return rule1.GetCreateTime().Before(rule2.GetCreateTime())
+}
+
+func comparePriority(str1, str2 string, wildcard func(string) bool) int {
+	// non-wildcard has higher priority
+	if !wildcard(str1) && wildcard(str2) {
+		return 1
+	}
+	if wildcard(str1) && !wildcard(str2) {
+		return -1
+	}
+
+	// longer host has higher priority
+	if len(str1) > len(str2) {
+		return 1
+	} else if len(str1) == len(str2) {
+		return 0
+	} else {
+		return -1
+	}
+
+}
+
+func wildcardPath(path string) bool {
+	if len(path) > 0 && strings.HasSuffix(path, "*") {
+		return true
+	}
+
+	return false
+}
+
+func wildcardHost(host string) bool {
+	if len(host) > 0 && strings.HasPrefix(host, "*.") {
+		return true
+	}
+
+	return false
+}
