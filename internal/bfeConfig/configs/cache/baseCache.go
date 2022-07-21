@@ -39,6 +39,12 @@ type BaseCache struct {
 	BaseRules httpBaseCache
 }
 
+type BuildRuleFunc func(ingress *netv1.Ingress, host, path string) Rule
+
+type BeforeUpdateIngressHook func() (bool, error)
+
+type AfterUpdateIngressHook func() error
+
 func NewBaseCache() *BaseCache {
 	return &BaseCache{
 		httpBaseCache{
@@ -91,7 +97,8 @@ func (c *BaseCache) UpdateByIngress(_ *netv1.Ingress) error {
 	panic("should be implemented")
 }
 
-func (c *BaseCache) UpdateByIngressFramework(ingress *netv1.Ingress, beforeUpdate func() (bool, error), newRuleFunc BuildRuleFunc, afterUpdate func() error) error {
+// UpdateByIngressFramework is an util function to help to implement UpdateByIngress
+func (c *BaseCache) UpdateByIngressFramework(ingress *netv1.Ingress, beforeUpdate BeforeUpdateIngressHook, newRuleFunc BuildRuleFunc, afterUpdate AfterUpdateIngressHook) error {
 	if beforeUpdate != nil {
 		if ok, err := beforeUpdate(); err != nil {
 			return err

@@ -18,8 +18,6 @@ import (
 	"strings"
 	"time"
 
-	netv1 "k8s.io/api/networking/v1"
-
 	"github.com/bfenetworks/ingress-bfe/internal/bfeConfig/annotations"
 )
 
@@ -49,8 +47,6 @@ type Rule interface {
 	// GetCond generates a BFE Condition from the Rule
 	GetCond() (string, error)
 }
-
-type BuildRuleFunc func(ingress *netv1.Ingress, host, path string) Rule
 
 // CompareRule compares the priority of two Rules.
 // The function can be used to sort a Rule list.
