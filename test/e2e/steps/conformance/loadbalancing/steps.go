@@ -41,7 +41,7 @@ var (
 func InitializeScenario(ctx *godog.ScenarioContext) {
 	ctx.Step(`^an Ingress resource in a new random namespace$`, state.AnIngressResourceInANewRandomNamespace)
 	ctx.Step(`^The Ingress status shows the IP address or FQDN where it is exposed$`, state.TheIngressStatusShowsTheIPAddressOrFQDNWhereItIsExposed)
-	ctx.Step(`^The backend deployment "([^"]*)" for the ingress resource is scaled to (\d+)$`, theBackendDeploymentForTheIngressResourceIsScaledTo)
+	ctx.Step(`^The backend deployment "([^"]*)" for the ingress resource is scaled to (\d+)$`, state.TheBackendDeploymentForTheIngressResourceIsScaledTo)
 	ctx.Step(`^I send (\d+) requests to "([^"]*)"$`, iSendRequestsTo)
 	ctx.Step(`^all the responses status-code must be (\d+) and the response body should contain the IP address of (\d+) different Kubernetes pods$`, allTheResponsesStatuscodeMustBeAndTheResponseBodyShouldContainTheIPAddressOfDifferentKubernetesPods)
 
@@ -54,10 +54,6 @@ func InitializeScenario(ctx *godog.ScenarioContext) {
 		// delete namespace an all the content
 		_ = kubernetes.DeleteNamespace(kubernetes.KubeClient, state.Namespace)
 	})
-}
-
-func theBackendDeploymentForTheIngressResourceIsScaledTo(deployment string, replicas int) error {
-	return kubernetes.ScaleIngressBackendDeployment(kubernetes.KubeClient, state.Namespace, state.IngressName, deployment, replicas)
 }
 
 func iSendRequestsTo(totalRequest int, rawURL string) error {

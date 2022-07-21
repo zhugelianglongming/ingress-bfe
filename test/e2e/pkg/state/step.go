@@ -133,3 +133,7 @@ func (s *Scenario) TheResponseLocationMustBe(location string) error {
 func (s *Scenario) TheResponseMustBeServedByTheService(service string) error {
 	return s.AssertServedBy(service)
 }
+
+func (s *Scenario) TheBackendDeploymentForTheIngressResourceIsScaledTo(deployment string, replicas int) error {
+	return kubernetes.ScaleIngressBackendDeployment(kubernetes.KubeClient, s.Namespace, s.IngressName, deployment, replicas)
+}
