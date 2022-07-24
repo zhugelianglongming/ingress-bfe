@@ -68,23 +68,21 @@ func (r *ModRedirectConfig) UpdateIngress(ingress *netv1.Ingress) error {
 		return err
 	}
 
-	redirectConfFile, err := r.getRedirectTable()
-	if err != nil {
+	if err := r.updateRedirectConfFile(); err != nil {
 		r.redirectRuleCache.DeleteByIngress(ingressName)
 		return err
 	}
-	r.redirectConfFile = redirectConfFile
 	return nil
 }
 
-func (r ModRedirectConfig) getRedirectTable() (*mod_redirect.RedirectConfFile, error) {
+func (r *ModRedirectConfig) updateRedirectConfFile() error {
 	ruleList := r.redirectRuleCache.GetRules()
 	redirectRuleList := make(mod_redirect.RuleFileList, 0, len(ruleList))
 	for _, rule := range ruleList {
 		rule := rule.(*redirectRule)
 		cond, err := rule.GetCond()
 		if err != nil {
-			return nil, err
+			return err
 		}
 		redirectRuleList = append(redirectRuleList, mod_redirect.RedirectRuleFile{
 			Cond:    &cond,
@@ -96,10 +94,11 @@ func (r ModRedirectConfig) getRedirectTable() (*mod_redirect.RedirectConfFile, e
 	redirectConfFile := newRedirectConfFile(util.NewVersion())
 	(*redirectConfFile.Config)[configs.DefaultProduct] = &redirectRuleList
 	if err := mod_redirect.RedirectConfCheck(*redirectConfFile); err != nil {
-		return nil, err
+		return err
 	}
 
-	return redirectConfFile, nil
+	r.redirectConfFile = redirectConfFile
+	return nil
 }
 
 func (r *ModRedirectConfig) DeleteIngress(namespace, name string) {
@@ -110,13 +109,15 @@ func (r *ModRedirectConfig) DeleteIngress(namespace, name string) {
 	}
 
 	r.redirectRuleCache.DeleteByIngress(ingressName)
-	r.getRedirectTable()
+	_ = r.updateRedirectConfFile()
 }
 
 func (r *ModRedirectConfig) Reload() error {
 	reload := false
 	if *r.redirectConfFile.Version != r.version {
-		// TODO cache 更新到 redirectConfFile
+		if err := r.updateRedirectConfFile(); err != nil {
+			return fmt.Errorf("dump %s error: %v", RedirectRuleData, err)
+		}
 		err := util.DumpBfeConf(RedirectRuleData, r.redirectConfFile)
 		if err != nil {
 			return fmt.Errorf("dump %s error: %v", RedirectRuleData, err)

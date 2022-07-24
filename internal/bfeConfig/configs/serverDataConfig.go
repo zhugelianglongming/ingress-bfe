@@ -141,7 +141,7 @@ func (c *ServerDataConfig) DeleteIngress(namespace, name string) {
 	}
 
 	c.routeRuleCache.DeleteByIngress(ingressName)
-	c.updateRouteTable()
+	_ = c.updateRouteTable()
 	c.updateBfeClusterConf()
 }
 
@@ -264,6 +264,11 @@ func (c *ServerDataConfig) Reload() error {
 		reload = true
 	}
 	if *c.routeTableFile.Version != c.routeTableVersion {
+		if err := c.updateRouteTable(); err != nil {
+			if err != nil {
+				return fmt.Errorf("dump cluster_table.data error: %v", err)
+			}
+		}
 		err := util.DumpBfeConf(RouteRuleData, c.routeTableFile)
 		if err != nil {
 			return fmt.Errorf("dump cluster_table.data error: %v", err)
@@ -272,6 +277,7 @@ func (c *ServerDataConfig) Reload() error {
 	}
 
 	if *c.bfeClusterConf.Version != c.bfeClusterConfVersion {
+		c.updateBfeClusterConf()
 		err := util.DumpBfeConf(ClusterConfData, c.bfeClusterConf)
 		if err != nil {
 			return fmt.Errorf("dump cluster_table.data error: %v", err)
