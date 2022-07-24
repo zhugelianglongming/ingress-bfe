@@ -27,16 +27,18 @@ import (
 	"github.com/bfenetworks/ingress-bfe/internal/bfeConfig/annotations"
 )
 
+// BaseCache is a cache of Rules.
+// It can be used to implement other complex caches.
+type BaseCache struct {
+	BaseRules httpBaseCache
+}
+
 type httpBaseCache struct {
 	// ingress -> rules
 	ingress2Rule *setmultimap.MultiMap
 
 	// host -> path -> rule
 	RuleMap map[string]map[string][]Rule
-}
-
-type BaseCache struct {
-	BaseRules httpBaseCache
 }
 
 type BuildRuleFunc func(ingress *netv1.Ingress, host, path string) Rule
@@ -98,7 +100,12 @@ func (c *BaseCache) UpdateByIngress(_ *netv1.Ingress) error {
 }
 
 // UpdateByIngressFramework is an util function to help to implement UpdateByIngress
-func (c *BaseCache) UpdateByIngressFramework(ingress *netv1.Ingress, beforeUpdate BeforeUpdateIngressHook, newRuleFunc BuildRuleFunc, afterUpdate AfterUpdateIngressHook) error {
+func (c *BaseCache) UpdateByIngressFramework(
+	ingress *netv1.Ingress,
+	beforeUpdate BeforeUpdateIngressHook,
+	newRuleFunc BuildRuleFunc,
+	afterUpdate AfterUpdateIngressHook,
+) error {
 	if beforeUpdate != nil {
 		if ok, err := beforeUpdate(); err != nil {
 			return err
@@ -169,29 +176,30 @@ func (c *httpBaseCache) delete(ingressName string) {
 }
 
 func (c *httpBaseCache) put(rule Rule) error {
-	if _, ok := c.RuleMap[rule.GetHost()]; !ok {
-		c.RuleMap[rule.GetHost()] = make(map[string][]Rule)
+	host, path := rule.GetHost(), rule.GetPath()
+	if _, ok := c.RuleMap[host]; !ok {
+		c.RuleMap[host] = make(map[string][]Rule)
 	}
 
-	for i, r := range c.RuleMap[rule.GetHost()][rule.GetPath()] {
+	for i, r := range c.RuleMap[host][path] {
 		if annotations.Equal(rule.GetAnnotations(), r.GetAnnotations()) {
 			// all conditions are same, oldest rule is valid
 			if rule.GetCreateTime().Before(r.GetCreateTime()) {
 				log.Log.V(0).Info("rule is overwritten by elder ingress", "ingress", r.GetIngress(), "host", r.GetHost(), "path", r.GetPath(), "old-ingress", rule.GetIngress())
 
-				c.ingress2Rule.Remove(rule.GetIngress(), c.RuleMap[rule.GetHost()][rule.GetPath()][i])
-				c.RuleMap[rule.GetHost()][rule.GetPath()][i] = rule
+				c.ingress2Rule.Remove(rule.GetIngress(), c.RuleMap[host][path][i])
+				c.RuleMap[host][path][i] = rule
 				c.ingress2Rule.Put(rule.GetIngress(), rule)
 				return nil
 			} else if rule.GetCreateTime().Equal(r.GetCreateTime()) {
 				return nil
 			} else {
-				return fmt.Errorf("ingress [%s] conflict with existing %s, rule [host: %s, path: %s]", rule.GetIngress(), r.GetIngress(), rule.GetHost(), rule.GetPath())
+				return fmt.Errorf("ingress [%s] conflict with existing %s, rule [host: %s, path: %s]", rule.GetIngress(), r.GetIngress(), host, path)
 			}
 		}
 	}
 	c.ingress2Rule.Put(rule.GetIngress(), rule)
-	c.RuleMap[rule.GetHost()][rule.GetPath()] = append(c.RuleMap[rule.GetHost()][rule.GetPath()], rule)
+	c.RuleMap[host][path] = append(c.RuleMap[host][path], rule)
 
 	return nil
 }
