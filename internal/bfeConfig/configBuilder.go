@@ -76,6 +76,7 @@ func (c *ConfigBuilder) UpdateIngress(ingress *netv1.Ingress, services map[strin
 		if err := module.UpdateIngress(ingress); err != nil {
 			c.clusterConf.DeleteIngress(ingress.Namespace, ingress.Name)
 			c.serverDataConf.DeleteIngress(ingress.Namespace, ingress.Name)
+			c.tlsConf.DeleteIngress(ingress.Namespace, ingress.Name)
 			for j := 0; j < i; j++ {
 				c.modules[j].DeleteIngress(ingress.Namespace, ingress.Name)
 			}
@@ -103,7 +104,7 @@ func (c *ConfigBuilder) UpdateService(service *corev1.Service, endpoint *corev1.
 	c.lock.Lock()
 	defer c.lock.Unlock()
 
-	c.clusterConf.UpdateService(service, endpoint)
+	_ = c.clusterConf.UpdateService(service, endpoint)
 }
 
 func (c *ConfigBuilder) DeleteService(namespace, name string) {
