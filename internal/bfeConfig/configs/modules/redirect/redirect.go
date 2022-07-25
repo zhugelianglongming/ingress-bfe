@@ -15,9 +15,12 @@
 package redirect
 
 import (
+	"errors"
 	"fmt"
+	"net/url"
 
 	"github.com/bfenetworks/bfe/bfe_modules/mod_redirect"
+	"github.com/bfenetworks/ingress-bfe/internal/bfeConfig/annotations"
 	netv1 "k8s.io/api/networking/v1"
 
 	"github.com/bfenetworks/ingress-bfe/internal/bfeConfig/configs"
@@ -136,4 +139,83 @@ func (r *ModRedirectConfig) Reload() error {
 
 func (r ModRedirectConfig) Name() string {
 	return "mod_redirect"
+}
+
+func parseRedirectActionFromAnnotations(annots map[string]string) (*mod_redirect.ActionFileList, int, error) {
+	annotationList := []string{annotations.RedirectURLSetAnnotation, annotations.RedirectURLFromQueryAnnotation, annotations.RedirectURLPrefixAddAnnotation, annotations.RedirectSchemeSetSetAnnotation}
+
+	cnt := 0
+	for _, annotation := range annotationList {
+		if _, ok := annots[annotation]; ok {
+			cnt++
+		}
+	}
+
+	switch {
+	case cnt == 0:
+		if annots[annotations.RedirectResponseStatusAnnotation] != "" {
+			return nil, 0, fmt.Errorf("unexpected annotation: {%s:%s}", annotations.RedirectResponseStatusAnnotation, annots[annotations.RedirectResponseStatusAnnotation])
+		}
+		return nil, 0, nil
+
+	case cnt == 1:
+		cmd, param, err := annotations.GetRedirectAction(annots)
+		if err != nil {
+			return nil, 0, err
+		}
+		if err := checkAction(cmd, param); err != nil {
+			return nil, 0, err
+		}
+
+		actions := &mod_redirect.ActionFileList{mod_redirect.ActionFile{
+			Cmd:    &cmd,
+			Params: []string{param},
+		}}
+		if err = mod_redirect.ActionFileListCheck(actions); err != nil {
+			return nil, 0, err
+		}
+
+		statusCode, err := annotations.GetRedirectStatusCode(annots)
+		if err != nil {
+			return nil, 0, err
+		}
+		return actions, statusCode, nil
+
+	default:
+		return nil, 0, errors.New("setting multiple redirection-related annotations at the same time is not supported")
+	}
+}
+
+func checkAction(cmd, param string) error {
+	switch cmd {
+	case "URL_SET":
+		if _, err := url.Parse(param); err != nil {
+			fakeHost := "fake.org"
+			fakeURL := fmt.Sprintf("https://%s%s", fakeHost, param)
+			if parsedURL, err := url.Parse(fakeURL); err != nil || parsedURL.Host != fakeHost {
+				return fmt.Errorf("the value of %s shoud be a valid URL string or a valid URL Path string: %w", annotations.RedirectURLSetAnnotation, err)
+			}
+		}
+		return nil
+
+	case "URL_FROM_QUERY":
+		return nil
+
+	case "URL_PREFIX_ADD":
+		if parsedURL, err := url.Parse(param); err != nil {
+			return fmt.Errorf("the value of %s shoud be a valid URL string without fragment: %w", annotations.RedirectURLSetAnnotation, err)
+		} else if parsedURL.Fragment != "" {
+			return fmt.Errorf("the value of %s shoud be a valid URL string without fragment, but found: %s", annotations.RedirectURLSetAnnotation, param)
+		}
+		return nil
+
+	case "SCHEME_SET":
+		if param != "https" && param != "http" {
+			return fmt.Errorf("scheme %s invalid, only http|https supported now", param)
+		}
+		return nil
+
+	default:
+		return fmt.Errorf("unsupported cmd for redirection action: %s", cmd)
+	}
 }
