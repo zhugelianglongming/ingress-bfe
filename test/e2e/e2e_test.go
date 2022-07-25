@@ -25,7 +25,6 @@ import (
 	"os/signal"
 	"path"
 	"path/filepath"
-	"strings"
 	"syscall"
 	"testing"
 	"time"
@@ -148,11 +147,13 @@ func TestSuite(t *testing.T) {
 	var failed bool
 
 	activeFeatures := make(map[string]InitialFunc)
-	for file, init := range features {
-		if strings.HasPrefix(file, godogTestFeature) {
-			activeFeatures[file] = init
-		}
-	}
+	//activeFeatures["features/annotations/redirect/redirect.feature"] = InitialFunc{redirect.InitializeScenario, nil}
+	activeFeatures["features/conformance/path_rules.feature"] = InitialFunc{pathrules.InitializeScenario, pathrules.InitializeSuite}
+	//for file, init := range features {
+	//	if strings.HasPrefix(file, godogTestFeature) {
+	//		activeFeatures[file] = init
+	//	}
+	//}
 
 	queue := make(chan int, FeatureParallel)
 
